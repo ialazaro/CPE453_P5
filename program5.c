@@ -12,10 +12,11 @@ int main(void) {
 
    sd_card_status = sdInit(1);   //initialize the card with slow clock
 
-   serial_init(); 
 
-   start_audio_pwm();
-   os_init();
+   //serial_init(); 
+
+   //start_audio_pwm();
+   //os_init();
    
    return 0;
 }
