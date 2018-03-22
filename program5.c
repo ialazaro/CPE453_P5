@@ -255,3 +255,26 @@ void handle_keys(void) {
       }
    }
 }
+
+void readFromFile(inode songFile, uint32_t blockNum, uint8_t* blockData){
+
+   uint32_t singleBlock[256], doubleBlock[256]; 
+
+   if(blockNum < 12){
+
+      sdReadData(songFile.i_block[blockNum]*2, 0, blockData, 1024);
+
+   }else if(blockNum < 268){
+
+      sdReadData(songFile.i_block[12]*2, 0, (uint8_t *)&singleBlock, 1024);
+      sdReadData(singleBlock[blockNum-12]*2, 0, blockData. 1024);
+
+   }else{
+
+      sdReadData(songFile.i_block[13]*2, 0, (uint8_t *)&doubleBlock, 1024);
+      sdReadData(doubleBlock[(blockNum-268)/256]*2, 0, (uint8_t *)&singleBlock, 1024);
+      sdReadData(singleBlock[(blockNum-268)%256]*2, 0, blockData. 1024);
+
+   }
+
+}
