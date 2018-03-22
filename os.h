@@ -80,10 +80,10 @@ typedef struct system_t {
    thread_t array[8];
    uint8_t threadsUsed;
    uint8_t currThread;
-   uint16_t num_interrupts;
+   uint32_t num_interrupts;
 } system_t;
 
-uint16_t get_time();
+uint32_t get_time();
 void os_start();
 void os_init();
 void create_thread(char *n, uint16_t address, void* args, uint16_t stack_size);

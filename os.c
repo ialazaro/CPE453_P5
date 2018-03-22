@@ -9,8 +9,8 @@ static system_t sysArray;
 
 uint16_t sysTimer = 0;
 
-uint16_t get_time() {
-    return sysArray.num_interrupts / 100;
+uint32_t get_time() {
+    return sysArray.num_interrupts / 22222;;
 }
 
 uint8_t get_next_thread(uint8_t fromYield) {
@@ -51,7 +51,7 @@ uint8_t get_num_threads() {
 }
 
 void print_thread_info() {
-   uint8_t i, cursor_position = 6, stack_usage;
+   uint8_t i, cursor_position = 8, stack_usage;
 
    for(i = 0; i < sysArray.threadsUsed; i++) {
       set_cursor(cursor_position++, 1);

@@ -12,16 +12,20 @@
 #include "program5.h"
 
 super_block sb;
+
 static song *songs;
 static uint8_t curr_song = 0;
+static song *curr;
+static uint32_t song_time = 0;
+static uint32_t song_start;
+
+static int8_t *block;
 
 int main(void) {
    uint8_t sd_card_status;
    inode data;
    dir_entry *entries;
    dir_entry *start;
-   uint8_t *block = calloc(sizeof(uint8_t), 1024);
-   song *curr;
    
    sd_card_status = sdInit(1);   //initialize the card with slow clock
 
@@ -33,6 +37,9 @@ int main(void) {
       print_string("sd init failed...exiting");
       return 1;
    }
+
+   
+   block = calloc(sizeof(uint8_t), 1024);
 
    start_audio_pwm();
    os_init();
@@ -63,6 +70,11 @@ int main(void) {
       
       curr->inode = entries->inode;
       
+      /* find the size of the file */
+      find_inode(&data, curr->inode);
+
+      curr->size = data.i_size/20480;
+
       entries = (void *)entries + entries->rec_len;
       if ((void *)entries != (void *)start + 1024) {
          curr->next = calloc(sizeof(song), 1);
@@ -73,6 +85,8 @@ int main(void) {
    curr->next = songs;
    songs->prev = curr;
    
+   curr = songs;
+
    /* initialize mutex */
 
    /* create_threads */
@@ -81,7 +95,7 @@ int main(void) {
    create_thread("display",  (uint16_t)display,  NULL, 64);
    create_thread("idle",     (uint16_t)idle,     NULL, 16);
 
-   //os_start();
+   os_start();
 
    return 0;
 }
@@ -124,19 +138,32 @@ void display(void) {
       print_string("Program 5");
       
       /* print song info */
-
-
       set_cursor(2, 1);
+      /* clear the line */
+      print_string("                                                                            ");
+      set_cursor(2, 1);
+      print_string(curr->name);
+
+      set_cursor(3, 1);
+      print_string("song length: ");
+      print_int32(curr->size);
+
+      set_cursor(4, 1);
+      print_string("current time: ");
+      print_int32(get_time() - song_start);
+      
+
+      set_cursor(5, 1);
       set_color(32);
       print_string("Time: ");
-      send_int(get_time());
+      print_int32(get_time());
       
-      set_cursor(5, 1);
+      set_cursor(6, 1);
       set_color(36);
       print_string("Number of threads: ");
       print_int(get_num_threads());
       
-      set_cursor(6, 1);
+      set_cursor(9, 1);
       set_color(37);
       print_thread_info();
    }
@@ -160,10 +187,18 @@ void handle_keys(void) {
    if (input != 255) {
       if (input == 'n') {
          /* go to next song */
+         curr = curr->next;
+         
+         /* reset the song timer */
+         song_start = get_time();
       }
       else if (input == 'p') {
          /* go to prev song */
-
+         curr = curr->prev;
+         
+         song_start = get_time();
       }
+
+
    }
 }

@@ -6,6 +6,7 @@ typedef struct song {
    char *name;
    struct song *next;
    struct song *prev;
+   uint32_t size;
 } song;
 
 /* main threads */
