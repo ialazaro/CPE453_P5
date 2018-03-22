@@ -55,7 +55,7 @@ void mutex_unlock(mutex_t* m) {
    sei();
 }
 
-void sem_init(semaphore_t* s, int8_t value) {
+void sem_init(semaphore_t* s, int16_t value) {
 	cli();
    s->value = value;
    s->count = 0;

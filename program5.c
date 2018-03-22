@@ -17,9 +17,24 @@ static song *songs;
 static uint8_t curr_song = 0;
 static song *curr;
 static uint32_t song_time = 0;
-static uint32_t song_start;
+static uint32_t song_start = 0;
 
-static int8_t *block;
+static uint8_t *block;
+
+static uint8_t buffer[2][512];
+static uint8_t idx[2] = {0};
+
+static uint8_t pidx = 0;
+static uint8_t ridx = 1;
+
+
+static mutex_t lock;
+static semaphore_t full;
+static semaphore_t empty;
+
+static inode song_inode;
+static uint8_t block_num;
+static uint8_t block_idx;
 
 int main(void) {
    uint8_t sd_card_status;
@@ -38,7 +53,6 @@ int main(void) {
       return 1;
    }
 
-   
    block = calloc(sizeof(uint8_t), 1024);
 
    start_audio_pwm();
@@ -87,7 +101,10 @@ int main(void) {
    
    curr = songs;
 
-   /* initialize mutex */
+   /* initialize mutex and semaphores */
+   mutex_init(&lock);
+   sem_init(&full, 0);
+   sem_init(&empty, 512);
 
    /* create_threads */
    create_thread("playback", (uint16_t)playback, NULL, 64);
@@ -106,9 +123,21 @@ int main(void) {
  */
 void playback(void) {
    
-   
    while (1) {
-      
+      sem_wait(&full);
+      mutex_lock(&lock);
+
+      if (idx[pidx] < 512) {
+         OCR2B = buffer[pidx][idx[pidx]];
+         idx[pidx]++;
+      }
+      else {
+         idx[pidx] = 0;
+         pidx ^= 1;
+      }
+
+      mutex_unlock(&free);
+      sem_signal(&empty);
    }
 }
 
@@ -117,11 +146,31 @@ void playback(void) {
  * thread 1
  */
 void read(void) {
-   
-   
    while (1) {
-      
+     /* "produce the item" */
+
+      sem_wait(&empty);
+      mutex_lock(&lock);
+
+      /* add item to buffer */
+      if (idx[ridx] < 512) {
+         buffer[ridx][idx[ridx]] = block[block_idx];
+
+         block_idx++;
+         if (block_idx == 1024) {
+            /* read in the next block */
+         }
+
+         idx[ridx]++;
+      }
+      else {
+         idx[ridx] = 0;
+         ridx ^= 1;
+      }
    }
+
+   mutex_unlock(&lock);
+   sem_signal(&full);
 }
 
 /*
@@ -129,6 +178,7 @@ void read(void) {
  * thread 2
  */
 void display(void) {
+   song_start = get_time();
    while (1) {
       
       handle_keys();
@@ -149,7 +199,11 @@ void display(void) {
       print_int32(curr->size);
 
       set_cursor(4, 1);
+      print_string("                                     ");
+      
+      set_cursor(4, 1);
       print_string("current time: ");
+      
       print_int32(get_time() - song_start);
       
 
@@ -188,17 +242,16 @@ void handle_keys(void) {
       if (input == 'n') {
          /* go to next song */
          curr = curr->next;
-         
-         /* reset the song timer */
+         find_inode(&song_inode, curr->inode); 
+         block_idx = 0;
          song_start = get_time();
       }
       else if (input == 'p') {
          /* go to prev song */
-         curr = curr->prev;
-         
+         curr = curr->prev; 
+         find_inode(&song_inode, curr->inode);
+         block_idx = 0;
          song_start = get_time();
       }
-
-
    }
 }
