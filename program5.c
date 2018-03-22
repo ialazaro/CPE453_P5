@@ -12,7 +12,7 @@
 
 static dir_entry *songs;
 static uint8_t curr_song = 0;
-static uint8_t block[1024];
+static uint8_t block[512];
 
 super_block sb;
 
@@ -41,15 +41,21 @@ int main(void) {
 
    /* find the root inode */
    find_inode(&data, (uint32_t)2);
+   set_cursor(15, 1);
+   print_string("root inode: ");
+   print_hex(data.i_mode);
 
-
-   sdReadData(data.i_block[0]*2, 0, (uint8_t *)block, 1024);
+   uint8_t b_read;
+   b_read = sdReadData(data.i_block[0]*2, 0, (uint8_t *)block, (uint16_t)512);
    songs = (void *)block;
 
-/*   uint16_t i;
-   for (i = 0; i < 1024; i++) {
+   uint16_t i;
+   for (i = 0; i < 512; i++) {
       print_int(block[i]);
-   }*/
+   }
+
+   set_cursor(40, 1);
+   print_int(b_read);
 
    /* initialize mutex */
 
