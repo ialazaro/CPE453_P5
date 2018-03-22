@@ -106,13 +106,12 @@ void find_inode(inode *data, uint32_t inode_number) {
    uint32_t block_group      = (inode_number - 1) / sb.s_inodes_per_group;
    uint32_t index            = (inode_number - 1) % sb.s_inodes_per_group;
    uint32_t containing_block = (index * sizeof(inode)) / MAX_OFFSET;
-   uint32_t offset           = index * sizeof(inode) % MAX_OFFSET;
+   uint16_t offset           = index * sizeof(inode) % MAX_OFFSET;
    uint32_t block            = BASE_BLOCKS +
                                (2*sb.s_blocks_per_group * block_group) +
                                containing_block;
-   uint8_t ret;
    
-   
+   /*
    set_cursor(1, 1);
    print_string("block group: ");
    print_int32(block_group);
@@ -135,11 +134,9 @@ void find_inode(inode *data, uint32_t inode_number) {
    
    set_cursor(6, 1);
    print_int32(inode_number);
+   */
 
-   ret = sdReadData(block, offset, (uint8_t *)data, sizeof(inode));
-   
-   set_cursor(7, 1);
-   print_int(sizeof(inode) + offset);
+   sdReadData(block, offset, (uint8_t *)data, 128);
 }
 
 void traverse(inode *data, char *path) {
