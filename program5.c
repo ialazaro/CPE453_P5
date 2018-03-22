@@ -136,7 +136,7 @@ void playback(void) {
          pidx ^= 1;
       }
 
-      mutex_unlock(&free);
+      mutex_unlock(&lock);
       sem_signal(&empty);
    }
 }
@@ -219,7 +219,7 @@ void display(void) {
       
       set_cursor(9, 1);
       set_color(37);
-      print_thread_info();
+//      print_thread_info();
    }
 }
 
@@ -267,13 +267,13 @@ void readFromFile(inode songFile, uint32_t blockNum, uint8_t* blockData){
    }else if(blockNum < 268){
 
       sdReadData(songFile.i_block[12]*2, 0, (uint8_t *)&singleBlock, 1024);
-      sdReadData(singleBlock[blockNum-12]*2, 0, blockData. 1024);
+      sdReadData(singleBlock[blockNum-12]*2, 0, blockData, 1024);
 
    }else{
 
       sdReadData(songFile.i_block[13]*2, 0, (uint8_t *)&doubleBlock, 1024);
       sdReadData(doubleBlock[(blockNum-268)/256]*2, 0, (uint8_t *)&singleBlock, 1024);
-      sdReadData(singleBlock[(blockNum-268)%256]*2, 0, blockData. 1024);
+      sdReadData(singleBlock[(blockNum-268)%256]*2, 0, blockData, 1024);
 
    }
 
