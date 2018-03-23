@@ -21,7 +21,7 @@ static uint32_t song_start = 0;
 
 static uint8_t *block;
 
-static uint8_t buffer[2][512];
+static uint8_t buffer[2][256];
 static uint8_t idx[2] = {0};
 
 static uint8_t pidx = 0;
@@ -127,7 +127,7 @@ void playback(void) {
       sem_wait(&full);
       mutex_lock(&lock);
 
-      if (idx[pidx] < 512) {
+      if (idx[pidx] < 256) {
          OCR2B = buffer[pidx][idx[pidx]];
          idx[pidx]++;
       }
@@ -138,6 +138,8 @@ void playback(void) {
 
       mutex_unlock(&lock);
       sem_signal(&empty);
+   
+      yield();
    }
 }
 
@@ -153,7 +155,7 @@ void read(void) {
       mutex_lock(&lock);
 
       /* add item to buffer */
-      if (idx[ridx] < 512) {
+      if (idx[ridx] < 256) {
          buffer[ridx][idx[ridx]] = block[block_idx];
 
          block_idx++;
