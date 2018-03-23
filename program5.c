@@ -24,8 +24,11 @@ static mutex_t locks[2];
 
 static inode song_inode;
 
+static uint32_t indirect[256];
+static uint32_t dindirect[256];
+static uint8_t count = 0;
+
 uint16_t curr_block = 0;
-uint8_t count = 0; /* 4 reads per block (256*4 = 1024) */
 
 int main(void) {
    uint8_t sd_card_status;
@@ -154,7 +157,6 @@ void playback(void) {
 void read(void) {
    uint8_t idx = 0;
    uint16_t curr_block = 0;
-   uint8_t count = 0; /* 4 reads per block (256*4 = 1024) */
 
    uint32_t block;
    uint16_t offset;
@@ -176,6 +178,7 @@ void read(void) {
       }
       else {
          /* use the current block */
+         
          if (curr_block < 12) {
             block = song_inode.i_block[curr_block]*2;
             block += (count  >= 2) ? 1 : 0;
@@ -186,7 +189,45 @@ void read(void) {
 
             count++;
          }
+         else if (curr_block < 268) {
+            /* single indirect blocks */
+            
+            /* read the indirect block once */
+            if (curr_block == 12) {
+               /* read in the indirect block */
+               sdReadData(song_inode.i_block[12]*2, 0, (uint8_t *)&indirect[0], 512);
+               sdReadData(song_inode.i_block[12]*2+1, 0, (uint8_t *)&indirect[128], 512);
+            }
 
+            block = indirect[curr_block - 12]*2;
+            block += (count >= 2) ? 1 : 0;
+
+            offset = (count % 2) ? 256 : 0;
+
+            sdReadData(block, offset, (uint8_t *)&buffer[idx], 256);
+         }
+         else {
+            /* double indirect block */
+            
+            /* read the 1st layer in once */
+            if (curr_block == 268) {
+               sdReadData(song_inode.i_block[13]*2, 0, (uint8_t *)&dindirect[0], 512);
+               sdReadData(song_inode.i_block[13]*2+1, 0, (uint8_t *)&dindirect[128], 512);
+            }
+
+            if (!((curr_block - 268) % 256)) {
+               /* fetch another block from 2nd layer */
+               sdReadData(dindirect[(curr_block - 268) / 256]*2, 0, (uint8_t *)&indirect[0], 512);
+               sdReadData(dindirect[(curr_block - 268) / 256]*2 + 1, 0, (uint8_t *)&indirect[128], 512);
+            }  
+         
+            block = indirect[(curr_block - 268) % 256]*2;
+            block += (count >= 2) ? 1 : 0;
+
+            offset = (count % 2) ? 256 : 0;
+
+            sdReadData(block, offset, (uint8_t *)&buffer[idx], 256);
+         }
       }
 
       mutex_unlock(&locks[idx]);
@@ -273,44 +314,3 @@ void handle_keys(void) {
    }
 }
 
-void readFromFile(inode songFile, uint32_t blockNum, uint8_t* blockData){
-
-   uint32_t blockIndex, off;
-
-   if(blockNum < (uint32_t)12){
-
-      blockIndex = 2*(songFile.i_block[blockNum]);
-      sdReadData(blockIndex, 0, blockData, (uint16_t)512);
-      sdReadData(blockIndex+1, 0, (blockData+512), (uint16_t)512);
-
-   }else if(blockNum < (uint32_t)268){
-
-      blockIndex = 2*(songFile.i_block[12]);
-      sdReadData(blockIndex, 0, blockData, (uint16_t)512);
-      sdReadData(blockIndex+1, 0, (blockData+512), (uint16_t)512);
-
-      off = 4*(blockNum-12);
-      blockIndex = (uint32_t)(*(blockData+off));
-
-      sdReadData((blockIndex*2), 0, blockData, (uint16_t)512);
-      sdReadData((blockIndex*2)+1, 0, (blockData+512), (uint16_t)512);
-
-   }else{
-      blockIndex = 2*(songFile.i_block[13]);
-      sdReadData(blockIndex, 0, blockData, (uint16_t)512);
-      sdReadData(blockIndex+1, 0, (blockData+512), (uint16_t)512);
-
-      off = 4*((blockNum-268)/256);
-      blockIndex = (uint32_t)(*(blockData+off));
-
-      sdReadData((blockIndex*2), 0, blockData, (uint16_t)512);
-      sdReadData((blockIndex*2)+1, 0, (blockData+512), (uint16_t)512);
-
-      off = 4*((blockNum-268)%256);
-      blockIndex = (uint32_t)(*(blockData+off));
-      sdReadData((blockIndex*2), 0, blockData, (uint16_t)512);
-      sdReadData((blockIndex*2)+1, 0, (blockData+512), (uint16_t)512);
-
-   }
-
-}
