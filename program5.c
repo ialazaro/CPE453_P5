@@ -156,6 +156,8 @@ void read(void) {
    uint16_t curr_block = 0;
    uint8_t count = 0; /* 4 reads per block (256*4 = 1024) */
 
+   uint32_t block;
+   uint16_t offset;
 
    while (1) {
       /* toggle which buffer to store the data */
@@ -170,11 +172,20 @@ void read(void) {
 
          count = 0;
          curr_block++;
-
+         
       }
       else {
          /* use the current block */
-         
+         if (curr_block < 12) {
+            block = song_inode.i_block[curr_block]*2;
+            block += (count  >= 2) ? 1 : 0;
+
+            offset = (count % 2) ? 256 : 0;
+
+            sdReadData(block, offset, (uint8_t *)&buffer[idx], 256);
+
+            count++;
+         }
 
       }
 
