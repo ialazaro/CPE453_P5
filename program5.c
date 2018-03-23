@@ -14,33 +14,25 @@
 super_block sb;
 
 static song *songs;
-static uint8_t curr_song = 0;
 static song *curr;
 static uint32_t song_time = 0;
 static uint32_t song_start = 0;
 
-static uint8_t *block;
-
 static uint8_t buffer[2][256];
-static uint8_t idx[2] = {0};
 
-static uint8_t pidx = 0;
-static uint8_t ridx = 1;
-
-
-static mutex_t lock;
-static semaphore_t full;
-static semaphore_t empty;
+static mutex_t locks[2];
 
 static inode song_inode;
-static uint8_t block_num;
-static uint8_t block_idx;
+
+uint16_t curr_block = 0;
+uint8_t count = 0; /* 4 reads per block (256*4 = 1024) */
 
 int main(void) {
    uint8_t sd_card_status;
-   inode data;
    dir_entry *entries;
    dir_entry *start;
+   
+   uint8_t *block;
    
    sd_card_status = sdInit(1);   //initialize the card with slow clock
 
@@ -62,10 +54,10 @@ int main(void) {
    sdReadData(2, 0, (uint8_t *)&sb, sizeof(super_block));
 
    /* find the root inode */
-   find_inode(&data, (uint32_t)2);
+   find_inode(&song_inode, (uint32_t)2);
 
-   sdReadData(data.i_block[0]*2, 0, (uint8_t *)block, (uint16_t)512);
-   sdReadData(data.i_block[0]*2 + 1, 0, (uint8_t *)&block[512], (uint16_t)512);
+   sdReadData(song_inode.i_block[0]*2, 0, (uint8_t *)block, (uint16_t)512);
+   sdReadData(song_inode.i_block[0]*2 + 1, 0, (uint8_t *)&block[512], (uint16_t)512);
    entries = (void *)block;
    start = entries;
 
@@ -85,9 +77,11 @@ int main(void) {
       curr->inode = entries->inode;
       
       /* find the size of the file */
-      find_inode(&data, curr->inode);
+      find_inode(&song_inode, curr->inode);
 
-      curr->size = data.i_size/20480;
+      curr->size = song_inode.i_size/20480;
+      
+      curr->num_blocks = curr->size / 1024;
 
       entries = (void *)entries + entries->rec_len;
       if ((void *)entries != (void *)start + 1024) {
@@ -100,19 +94,26 @@ int main(void) {
    songs->prev = curr;
    
    curr = songs;
+   
+   /* free the block since we will be using the buffers now */
+   free(block);
 
    /* initialize mutex and semaphores */
-   mutex_init(&lock);
-   sem_init(&full, 0);
-   sem_init(&empty, 512);
+   mutex_init(&locks[0]);
+   mutex_init(&locks[1]);
 
    /* create_threads */
    create_thread("playback", (uint16_t)playback, NULL, 64);
    create_thread("read",     (uint16_t)read,     NULL, 64);
    create_thread("display",  (uint16_t)display,  NULL, 64);
-   create_thread("idle",     (uint16_t)idle,     NULL, 16);
+   //create_thread("idle",     (uint16_t)idle,     NULL, 16);
 
+   /* start the os */
    os_start();
+
+   clear_screen();
+   set_cursor(1, 1);
+   print_string("something went wrong!");
 
    return 0;
 }
@@ -122,24 +123,27 @@ int main(void) {
  * thread 0
  */
 void playback(void) {
-   
+   uint8_t idx = 0; /* which buffer to play */
+   uint8_t pos = 0; /* where in the buffer  */
+
    while (1) {
-      sem_wait(&full);
-      mutex_lock(&lock);
-
-      if (idx[pidx] < 256) {
-         OCR2B = buffer[pidx][idx[pidx]];
-         idx[pidx]++;
-      }
-      else {
-         idx[pidx] = 0;
-         pidx ^= 1;
+      /* 
+       * check if the entire buffer has been played
+       * will overflow back to 0
+       */
+      if (pos == 0) {
+         /* toggle which buffer to play */
+         idx ^= 1;
       }
 
-      mutex_unlock(&lock);
-      sem_signal(&empty);
+      mutex_lock(&locks[idx]);
+
+      OCR2B = buffer[idx][pos];
+      pos++;
+
+      mutex_unlock(&locks[idx]);
    
-      yield();
+      yield(); 
    }
 }
 
@@ -148,31 +152,34 @@ void playback(void) {
  * thread 1
  */
 void read(void) {
+   uint8_t idx = 0;
+   uint16_t curr_block = 0;
+   uint8_t count = 0; /* 4 reads per block (256*4 = 1024) */
+
+
    while (1) {
-     /* "produce the item" */
+      /* toggle which buffer to store the data */
+      idx ^= 1;
+   
+      mutex_lock(&locks[idx]);
 
-      sem_wait(&empty);
-      mutex_lock(&lock);
+      /* get the data and store it in the block */
 
-      /* add item to buffer */
-      if (idx[ridx] < 256) {
-         buffer[ridx][idx[ridx]] = block[block_idx];
+      if (count == 4) {
+         /* fetch the next block of data */
 
-         block_idx++;
-         if (block_idx == 1024) {
-            /* read in the next block */
-         }
+         count = 0;
+         curr_block++;
 
-         idx[ridx]++;
       }
       else {
-         idx[ridx] = 0;
-         ridx ^= 1;
-      }
-   }
+         /* use the current block */
+         
 
-   mutex_unlock(&lock);
-   sem_signal(&full);
+      }
+
+      mutex_unlock(&locks[idx]);
+   }
 }
 
 /*
@@ -219,9 +226,9 @@ void display(void) {
       print_string("Number of threads: ");
       print_int(get_num_threads());
       
-      set_cursor(9, 1);
-      set_color(37);
-//      print_thread_info();
+      //set_cursor(9, 1);
+      //set_color(37);
+      //print_thread_info();
    }
 }
 
@@ -236,7 +243,6 @@ void idle(void) {
 /*
  * handle the key presses to change songs
  */
-
 void handle_keys(void) {
    uint8_t input = read_byte();
 
@@ -244,15 +250,13 @@ void handle_keys(void) {
       if (input == 'n') {
          /* go to next song */
          curr = curr->next;
-         find_inode(&song_inode, curr->inode); 
-         block_idx = 0;
+         find_inode(&song_inode, curr->inode);
          song_start = get_time();
       }
       else if (input == 'p') {
          /* go to prev song */
          curr = curr->prev; 
          find_inode(&song_inode, curr->inode);
-         block_idx = 0;
          song_start = get_time();
       }
    }
