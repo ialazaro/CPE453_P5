@@ -7,6 +7,7 @@ typedef struct song {
    struct song *next;
    struct song *prev;
    uint32_t size;
+   uint16_t num_blocks;
 } song;
 
 /* main threads */
